@@ -1,0 +1,176 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeMap RD | Mapa de robos recientes</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">RD</div>
+        <div>
+          <h1>SafeMap RD</h1>
+          <p>Reportes recientes de atracos y robos para prevenir rutas de riesgo</p>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <p id="serverStatus" class="server-status">Conectando al servidor...</p>
+
+        <div class="filters">
+          <label>
+            Tipo
+            <select id="typeFilter">
+              <option value="all">Todos</option>
+              <option value="robbery">Atraco</option>
+              <option value="assault">Asalto</option>
+              <option value="theft">Robo</option>
+              <option value="vehicle">Robo de vehiculo</option>
+            </select>
+          </label>
+
+          <label>
+            Periodo
+            <select id="timeFilter">
+              <option value="7">Ultimos 7 dias</option>
+              <option value="30" selected>Ultimos 30 dias</option>
+              <option value="90">Ultimos 90 dias</option>
+              <option value="all">Todo</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <section class="metrics" aria-live="polite">
+      <article>
+        <p>Incidentes filtrados</p>
+        <strong id="metricIncidents">0</strong>
+      </article>
+      <article>
+        <p>Zonas calientes</p>
+        <strong id="metricZones">0</strong>
+      </article>
+      <article>
+        <p>Ultimo reporte</p>
+        <strong id="metricLast">--</strong>
+      </article>
+    </section>
+
+    <main class="layout">
+      <section class="map-panel">
+        <div id="map"></div>
+        <div class="map-help">
+          <span class="dot dot-red"></span> Riesgo alto
+          <span class="dot dot-orange"></span> Riesgo medio
+          <span class="dot dot-yellow"></span> Riesgo moderado
+          <span class="dot dot-blue"></span> Punto reportado
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="card-block">
+          <div class="block-head">
+            <h2>Incidentes recientes</h2>
+            <span id="incidentCount">0 encontrados</span>
+          </div>
+          <div id="incidentList" class="incident-list"></div>
+        </section>
+
+        <section class="card-block">
+          <div class="block-head">
+            <h2>Zonas calientes</h2>
+            <span>Top 8</span>
+          </div>
+          <ul id="hotZoneList" class="hot-list"></ul>
+        </section>
+
+        <section class="card-block">
+          <div class="block-head">
+            <h2>Reportar robo</h2>
+            <span>Comunitario</span>
+          </div>
+
+          <form id="reportForm" class="report-form" autocomplete="off">
+            <label>
+              Tipo de incidente
+              <select id="incidentType" required>
+                <option value="robbery">Atraco</option>
+                <option value="assault">Asalto</option>
+                <option value="theft">Robo</option>
+                <option value="vehicle">Robo de vehiculo</option>
+              </select>
+            </label>
+
+            <label>
+              Descripcion
+              <input id="incidentDescription" type="text" maxlength="120" required placeholder="Ej: Despojo de celular en esquina" />
+            </label>
+
+            <label>
+              Sector / zona
+              <input id="incidentSector" type="text" maxlength="80" required placeholder="Ej: Naco, Gazcue, Bella Vista" />
+            </label>
+
+            <label>
+              Fecha y hora
+              <input id="incidentDate" type="datetime-local" required />
+            </label>
+
+            <div class="coords-grid">
+              <label>
+                Latitud
+                <input id="incidentLat" type="number" step="0.0001" required readonly />
+              </label>
+              <label>
+                Longitud
+                <input id="incidentLng" type="number" step="0.0001" required readonly />
+              </label>
+            </div>
+
+            <button type="submit">Guardar reporte</button>
+            <p class="form-tip">Selecciona coordenadas con clic en el mapa.</p>
+          </form>
+        </section>
+
+        <section class="card-block">
+          <div class="block-head">
+            <h2>Panel admin</h2>
+            <span id="adminBadge" class="admin-badge">No autenticado</span>
+          </div>
+
+          <form id="loginForm" class="report-form">
+            <label>
+              Usuario
+              <input id="adminUser" type="text" maxlength="40" required placeholder="admin" />
+            </label>
+            <label>
+              Clave
+              <input id="adminPass" type="password" maxlength="120" required placeholder="********" />
+            </label>
+            <button type="submit">Iniciar sesion</button>
+          </form>
+
+          <div id="adminActions" class="admin-actions hidden">
+            <p>Modo administrador activo. Puedes eliminar reportes falsos.</p>
+            <button id="logoutBtn" type="button" class="danger-btn">Cerrar sesion</button>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer-note">
+      <p>Uso preventivo comunitario. Ante una emergencia real en Republica Dominicana llama al 911.</p>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>

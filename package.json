@@ -1,0 +1,11 @@
+﻿{
+  "name": "safemap-rd-security",
+  "version": "1.0.0",
+  "description": "Mapa comunitario de robos recientes en RD con API segura y panel admin.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "license": "MIT"
+}

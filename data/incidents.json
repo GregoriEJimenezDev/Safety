@@ -1,0 +1,123 @@
+[
+  {
+    "id": "48384f34-2139-40d6-ac9a-10c45ab63c1c",
+    "type": "robbery",
+    "description": "Prueba automatica de reporte para validacion",
+    "sector": "Naco",
+    "lat": 18.4862,
+    "lng": -69.931,
+    "date": "2026-04-22T23:42:00.409Z",
+    "createdAt": "2026-04-22T23:47:00.420Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "73814b8b-1f17-45de-aec9-89d4d0634c08",
+    "type": "robbery",
+    "description": "Despojo de celular en parada",
+    "sector": "Naco",
+    "lat": 18.4857,
+    "lng": -69.9341,
+    "date": "2026-04-22T00:30:00.000Z",
+    "createdAt": "2026-04-22T00:40:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "98e020d7-cf83-4aba-9bff-f61610f771a8",
+    "type": "assault",
+    "description": "Asalto a peaton en avenida principal",
+    "sector": "Naco",
+    "lat": 18.4869,
+    "lng": -69.9314,
+    "date": "2026-04-20T01:10:00.000Z",
+    "createdAt": "2026-04-20T01:15:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "845138b0-59ef-44ad-bb3c-070d35f7a16b",
+    "type": "theft",
+    "description": "Robo de cartera en colmado",
+    "sector": "Gazcue",
+    "lat": 18.4679,
+    "lng": -69.9045,
+    "date": "2026-04-20T23:20:00.000Z",
+    "createdAt": "2026-04-20T23:25:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "20e6492a-63eb-48c9-9b6a-d42eac312125",
+    "type": "vehicle",
+    "description": "Robo de motocicleta estacionada",
+    "sector": "Villa Juana",
+    "lat": 18.4941,
+    "lng": -69.9052,
+    "date": "2026-04-18T03:05:00.000Z",
+    "createdAt": "2026-04-18T03:07:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "0b897984-e9a7-49d0-b480-40780b5059a9",
+    "type": "robbery",
+    "description": "Atraco con arma blanca",
+    "sector": "Los Mina",
+    "lat": 18.5016,
+    "lng": -69.8653,
+    "date": "2026-04-18T22:15:00.000Z",
+    "createdAt": "2026-04-18T22:20:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "eff371b6-3c1a-4308-bbc7-c7d81db26fea",
+    "type": "assault",
+    "description": "Intento de asalto en semaforo",
+    "sector": "Piantini",
+    "lat": 18.4769,
+    "lng": -69.9367,
+    "date": "2026-04-16T02:40:00.000Z",
+    "createdAt": "2026-04-16T02:43:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "3a39dd2a-3ba0-4942-a7b4-0bc3f9241587",
+    "type": "robbery",
+    "description": "Robo a negocio pequeno",
+    "sector": "Piantini",
+    "lat": 18.4784,
+    "lng": -69.9381,
+    "date": "2026-04-13T00:50:00.000Z",
+    "createdAt": "2026-04-13T00:52:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "b2ff7fe4-a673-4457-baa6-8b208bd3f684",
+    "type": "theft",
+    "description": "Sustraccion de pertenencias en vehiculo",
+    "sector": "Bella Vista",
+    "lat": 18.4556,
+    "lng": -69.9454,
+    "date": "2026-04-14T21:35:00.000Z",
+    "createdAt": "2026-04-14T21:40:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "16da1746-31c2-4736-b36b-fdbd723a8f82",
+    "type": "vehicle",
+    "description": "Robo de retrovisores",
+    "sector": "Bella Vista",
+    "lat": 18.4571,
+    "lng": -69.9423,
+    "date": "2026-04-11T01:05:00.000Z",
+    "createdAt": "2026-04-11T01:07:00.000Z",
+    "reportedBy": "community"
+  },
+  {
+    "id": "89f033a6-d8bf-469c-ac11-18efba47b159",
+    "type": "robbery",
+    "description": "Asalto en banca de loteria",
+    "sector": "San Carlos",
+    "lat": 18.4739,
+    "lng": -69.9048,
+    "date": "2026-04-09T23:05:00.000Z",
+    "createdAt": "2026-04-09T23:10:00.000Z",
+    "reportedBy": "community"
+  }
+]
