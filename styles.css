@@ -406,7 +406,7 @@ button[disabled] {
   font-size: 0.8rem;
 }
 
-.hidden { display: none; }
+.hidden { display: none !important; }
 
 .form-tip {
   margin: 0;
@@ -617,3 +617,4 @@ button[disabled] {
     justify-content: space-between;
   }
 }
+
