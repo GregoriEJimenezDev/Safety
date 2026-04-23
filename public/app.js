@@ -11,6 +11,12 @@
 
   const TOKEN_KEY = "safemap_admin_token";
   const RD_CENTER = [18.4861, -69.9312];
+  const RD_BOUNDS = {
+    latMin: 17.4,
+    latMax: 20.2,
+    lngMin: -72.1,
+    lngMax: -68.1
+  };
 
   const TYPE_META = {
     robbery: { label: "Atraco" },
@@ -21,6 +27,9 @@
 
   const dom = {
     serverStatus: document.getElementById("serverStatus"),
+    lastUpdated: document.getElementById("lastUpdated"),
+    refreshBtn: document.getElementById("refreshBtn"),
+    helpBtn: document.getElementById("helpBtn"),
     typeFilter: document.getElementById("typeFilter"),
     timeFilter: document.getElementById("timeFilter"),
     incidentList: document.getElementById("incidentList"),
@@ -30,6 +39,9 @@
     metricZones: document.getElementById("metricZones"),
     metricLast: document.getElementById("metricLast"),
     reportForm: document.getElementById("reportForm"),
+    submitReportBtn: document.getElementById("submitReportBtn"),
+    clearFormBtn: document.getElementById("clearFormBtn"),
+    reportError: document.getElementById("reportError"),
     incidentType: document.getElementById("incidentType"),
     incidentDescription: document.getElementById("incidentDescription"),
     incidentSector: document.getElementById("incidentSector"),
@@ -37,21 +49,36 @@
     incidentLat: document.getElementById("incidentLat"),
     incidentLng: document.getElementById("incidentLng"),
     loginForm: document.getElementById("loginForm"),
+    loginBtn: document.getElementById("loginBtn"),
+    loginError: document.getElementById("loginError"),
     adminUser: document.getElementById("adminUser"),
     adminPass: document.getElementById("adminPass"),
     adminBadge: document.getElementById("adminBadge"),
     adminActions: document.getElementById("adminActions"),
     logoutBtn: document.getElementById("logoutBtn"),
+    loadingOverlay: document.getElementById("loadingOverlay"),
+    loadingText: document.getElementById("loadingText"),
+    undoBar: document.getElementById("undoBar"),
+    undoText: document.getElementById("undoText"),
+    undoBtn: document.getElementById("undoBtn"),
+    helpModal: document.getElementById("helpModal"),
+    closeHelpBtn: document.getElementById("closeHelpBtn"),
     toast: document.getElementById("toast")
+  };
+
+  const state = {
+    loadingCounter: 0,
+    token: sessionStorage.getItem(TOKEN_KEY) || "",
+    adminUser: null,
+    currentIncidents: [],
+    deleteUndo: null,
+    online: navigator.onLine
   };
 
   let map;
   let markersLayer;
   let hotZoneLayer;
   let tempMarker;
-  let token = sessionStorage.getItem(TOKEN_KEY) || "";
-  let adminUser = null;
-  let currentIncidents = [];
   const markerById = new Map();
 
   init().catch((error) => {
@@ -66,7 +93,7 @@
     await verifySession();
     await refreshAll();
 
-    window.setTimeout(() => map.invalidateSize(), 110);
+    window.setTimeout(() => map.invalidateSize(), 120);
   }
 
   function bindEvents() {
@@ -78,10 +105,25 @@
       refreshAll().catch(handleError);
     });
 
+    dom.refreshBtn.addEventListener("click", () => {
+      refreshAll().catch(handleError);
+    });
+
+    dom.helpBtn.addEventListener("click", openHelp);
+    dom.closeHelpBtn.addEventListener("click", closeHelp);
+
+    dom.helpModal.addEventListener("click", (event) => {
+      if (event.target === dom.helpModal) {
+        closeHelp();
+      }
+    });
+
     dom.reportForm.addEventListener("submit", (event) => {
       event.preventDefault();
       submitReport().catch(handleError);
     });
+
+    dom.clearFormBtn.addEventListener("click", clearReportForm);
 
     dom.loginForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -89,13 +131,52 @@
     });
 
     dom.logoutBtn.addEventListener("click", () => {
-      token = "";
-      adminUser = null;
+      state.token = "";
+      state.adminUser = null;
       sessionStorage.removeItem(TOKEN_KEY);
       updateAdminUi();
       refreshAll().catch(handleError);
       showToast("Sesion cerrada");
     });
+
+    dom.undoBtn.addEventListener("click", () => {
+      undoDelete().catch(handleError);
+    });
+
+    window.addEventListener("keydown", onGlobalShortcuts);
+
+    window.addEventListener("online", () => {
+      state.online = true;
+      showToast("Conexion recuperada.");
+      refreshAll().catch(handleError);
+    });
+
+    window.addEventListener("offline", () => {
+      state.online = false;
+      renderOfflineStatus();
+      showToast("Sin conexion. Mostrando el ultimo estado disponible.");
+    });
+  }
+
+  function onGlobalShortcuts(event) {
+    const activeTag = document.activeElement?.tagName?.toLowerCase();
+    const isTyping = activeTag === "input" || activeTag === "textarea" || activeTag === "select";
+
+    if (event.key === "Escape" && !dom.helpModal.classList.contains("hidden")) {
+      closeHelp();
+      return;
+    }
+
+    if (event.key === "?" || event.key === "F1") {
+      event.preventDefault();
+      openHelp();
+      return;
+    }
+
+    if (!isTyping && event.altKey && event.key.toLowerCase() === "r") {
+      event.preventDefault();
+      refreshAll().catch(handleError);
+    }
   }
 
   function initMap() {
@@ -106,7 +187,7 @@
     });
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      attribution: "&copy; OpenStreetMap &copy; CARTO",
       maxZoom: 20
     }).addTo(map);
 
@@ -116,6 +197,7 @@
     map.on("click", (ev) => {
       dom.incidentLat.value = ev.latlng.lat.toFixed(5);
       dom.incidentLng.value = ev.latlng.lng.toFixed(5);
+      clearFormError("report");
 
       if (tempMarker) {
         tempMarker.setLatLng(ev.latlng);
@@ -138,17 +220,17 @@
   }
 
   async function verifySession() {
-    if (!token) {
+    if (!state.token) {
       updateAdminUi();
       return;
     }
 
     try {
-      const data = await apiRequest(API.me, { token });
-      adminUser = data.user;
+      const data = await apiRequest(API.me, { token: state.token });
+      state.adminUser = data.user;
     } catch {
-      token = "";
-      adminUser = null;
+      state.token = "";
+      state.adminUser = null;
       sessionStorage.removeItem(TOKEN_KEY);
     }
 
@@ -156,30 +238,50 @@
   }
 
   async function refreshAll() {
-    const query = new URLSearchParams({
-      type: dom.typeFilter.value,
-      days: dom.timeFilter.value
-    }).toString();
+    setLoading(true, "Actualizando incidentes...");
 
-    const [health, incidentsData, hotzonesData] = await Promise.all([
-      apiRequest(API.health),
-      apiRequest(`${API.incidents}?${query}`),
-      apiRequest(`${API.hotzones}?${query}`)
-    ]);
+    try {
+      const query = new URLSearchParams({
+        type: dom.typeFilter.value,
+        days: dom.timeFilter.value
+      }).toString();
 
-    renderServerStatus(health);
+      const [health, incidentsData, hotzonesData] = await Promise.all([
+        apiRequest(API.health),
+        apiRequest(`${API.incidents}?${query}`),
+        apiRequest(`${API.hotzones}?${query}`)
+      ]);
 
-    currentIncidents = incidentsData.items || [];
-    renderIncidents(currentIncidents);
-    renderMarkers(currentIncidents);
+      renderServerStatus(health);
 
-    const zones = hotzonesData.items || [];
-    renderHotzones(zones);
-    renderMetrics(currentIncidents, zones);
+      state.currentIncidents = incidentsData.items || [];
+      renderIncidents(state.currentIncidents);
+      renderMarkers(state.currentIncidents);
+
+      const zones = hotzonesData.items || [];
+      renderHotzones(zones);
+      renderMetrics(state.currentIncidents, zones);
+
+      dom.lastUpdated.textContent = `Actualizado: ${formatDate(new Date().toISOString(), true)}`;
+    } finally {
+      setLoading(false);
+    }
   }
 
   function renderServerStatus(health) {
+    dom.serverStatus.classList.remove("is-loading", "is-offline");
+
+    if (!state.online) {
+      renderOfflineStatus();
+      return;
+    }
+
     dom.serverStatus.textContent = `Servidor activo | ${health.incidents} reportes totales`;
+  }
+
+  function renderOfflineStatus() {
+    dom.serverStatus.textContent = "Sin conexion al servidor";
+    dom.serverStatus.classList.add("is-offline");
   }
 
   function renderIncidents(items) {
@@ -207,11 +309,12 @@
       badge.textContent = TYPE_META[item.type]?.label || item.type;
       top.appendChild(badge);
 
-      if (adminUser?.role === "admin") {
+      if (state.adminUser?.role === "admin") {
         const deleteBtn = document.createElement("button");
         deleteBtn.type = "button";
         deleteBtn.className = "delete-btn";
         deleteBtn.textContent = "Eliminar";
+        deleteBtn.title = "Eliminar reporte y habilitar opcion deshacer";
         deleteBtn.addEventListener("click", (ev) => {
           ev.stopPropagation();
           deleteIncident(item.id).catch(handleError);
@@ -291,8 +394,8 @@
   }
 
   function updateAdminUi() {
-    if (adminUser) {
-      dom.adminBadge.textContent = `Autenticado: ${adminUser.username}`;
+    if (state.adminUser) {
+      dom.adminBadge.textContent = `Autenticado: ${state.adminUser.username}`;
       dom.adminBadge.classList.add("ok");
       dom.adminActions.classList.remove("hidden");
       dom.loginForm.classList.add("hidden");
@@ -305,6 +408,8 @@
   }
 
   async function submitReport() {
+    clearFormError("report");
+
     const payload = {
       type: dom.incidentType.value,
       description: normalizeText(dom.incidentDescription.value, 120),
@@ -314,65 +419,173 @@
       lng: Number(dom.incidentLng.value)
     };
 
-    if (!payload.description || !payload.sector || !payload.date || !Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) {
-      showToast("Completa todos los campos y selecciona coordenadas.");
+    const reportError = validateReport(payload);
+    if (reportError) {
+      showFormError("report", reportError);
       return;
     }
 
-    await apiRequest(API.incidents, {
-      method: "POST",
-      token,
-      body: payload
-    });
+    setButtonBusy(dom.submitReportBtn, true, "Guardando...");
 
+    try {
+      await apiRequest(API.incidents, {
+        method: "POST",
+        token: state.token,
+        body: payload
+      });
+
+      clearReportForm();
+      showToast("Reporte guardado.");
+      await refreshAll();
+    } finally {
+      setButtonBusy(dom.submitReportBtn, false);
+    }
+  }
+
+  function validateReport(payload) {
+    if (!payload.type || !TYPE_META[payload.type]) return "Tipo de incidente invalido.";
+    if (payload.description.length < 8) return "La descripcion debe tener al menos 8 caracteres.";
+    if (payload.sector.length < 2) return "El sector debe tener al menos 2 caracteres.";
+    if (!payload.date) return "Selecciona fecha y hora del incidente.";
+    if (!Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) return "Selecciona coordenadas en el mapa.";
+
+    if (!isWithinRD(payload.lat, payload.lng)) {
+      return "Las coordenadas deben estar dentro de Republica Dominicana.";
+    }
+
+    const date = new Date(payload.date);
+    if (Number.isNaN(date.getTime())) return "Fecha invalida.";
+    if (date.getTime() > Date.now()) return "La fecha no puede estar en el futuro.";
+
+    return "";
+  }
+
+  function clearReportForm() {
     dom.reportForm.reset();
+    clearFormError("report");
     initDateDefault();
 
     if (tempMarker) {
       map.removeLayer(tempMarker);
       tempMarker = null;
     }
-
-    showToast("Reporte guardado.");
-    await refreshAll();
   }
 
   async function adminLogin() {
+    clearFormError("login");
+
     const username = normalizeText(dom.adminUser.value, 40);
     const password = dom.adminPass.value;
 
     if (!username || !password) {
-      showToast("Completa usuario y clave.");
+      showFormError("login", "Completa usuario y clave.");
       return;
     }
 
-    const data = await apiRequest(API.login, {
-      method: "POST",
-      body: { username, password }
-    });
+    setButtonBusy(dom.loginBtn, true, "Ingresando...");
 
-    token = data.token;
-    sessionStorage.setItem(TOKEN_KEY, token);
-    adminUser = data.user;
-    dom.loginForm.reset();
-    updateAdminUi();
-    showToast("Sesion admin iniciada");
-    await refreshAll();
+    try {
+      const data = await apiRequest(API.login, {
+        method: "POST",
+        body: { username, password }
+      });
+
+      state.token = data.token;
+      sessionStorage.setItem(TOKEN_KEY, state.token);
+      state.adminUser = data.user;
+      dom.loginForm.reset();
+      updateAdminUi();
+      showToast("Sesion admin iniciada");
+      await refreshAll();
+    } finally {
+      setButtonBusy(dom.loginBtn, false);
+    }
   }
 
   async function deleteIncident(id) {
-    if (!token) {
+    if (!state.token) {
       showToast("Debes iniciar sesion como admin.");
+      return;
+    }
+
+    const item = state.currentIncidents.find((incident) => incident.id === id);
+    if (!item) {
+      showToast("No se encontro el reporte a eliminar.");
+      return;
+    }
+
+    const accepted = window.confirm(`Eliminar reporte "${item.description}"?`);
+    if (!accepted) {
       return;
     }
 
     await apiRequest(`${API.incidents}/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      token
+      token: state.token
     });
 
-    showToast("Reporte eliminado");
+    showToast("Reporte eliminado. Puedes deshacer por 10 segundos.");
+    startUndoWindow(item);
     await refreshAll();
+  }
+
+  function startUndoWindow(item) {
+    clearUndoWindow();
+
+    dom.undoText.textContent = "Reporte eliminado. Deshacer disponible por 10s.";
+    dom.undoBar.classList.remove("hidden");
+
+    const timeoutId = window.setTimeout(() => {
+      clearUndoWindow();
+    }, 10_000);
+
+    state.deleteUndo = {
+      item,
+      timeoutId
+    };
+  }
+
+  function clearUndoWindow() {
+    if (state.deleteUndo?.timeoutId) {
+      window.clearTimeout(state.deleteUndo.timeoutId);
+    }
+
+    state.deleteUndo = null;
+    dom.undoBar.classList.add("hidden");
+  }
+
+  async function undoDelete() {
+    if (!state.deleteUndo) {
+      showToast("No hay accion para deshacer.");
+      return;
+    }
+
+    const incident = state.deleteUndo.item;
+
+    await apiRequest(API.incidents, {
+      method: "POST",
+      token: state.token,
+      body: {
+        type: incident.type,
+        description: incident.description,
+        sector: incident.sector,
+        lat: incident.lat,
+        lng: incident.lng,
+        date: incident.date
+      }
+    });
+
+    clearUndoWindow();
+    showToast("Reporte restaurado.");
+    await refreshAll();
+  }
+
+  function openHelp() {
+    dom.helpModal.classList.remove("hidden");
+  }
+
+  function closeHelp() {
+    dom.helpModal.classList.add("hidden");
   }
 
   function focusIncident(id) {
@@ -442,6 +655,58 @@
     return data;
   }
 
+  function setButtonBusy(button, busy, busyLabel = "Procesando...") {
+    if (!button) return;
+
+    if (busy) {
+      button.dataset.originalLabel = button.textContent;
+      button.textContent = busyLabel;
+      button.disabled = true;
+      return;
+    }
+
+    const original = button.dataset.originalLabel;
+    if (original) {
+      button.textContent = original;
+    }
+    button.disabled = false;
+  }
+
+  function setLoading(on, message = "Actualizando datos...") {
+    if (on) {
+      state.loadingCounter += 1;
+      dom.loadingText.textContent = message;
+      dom.loadingOverlay.classList.remove("hidden");
+      dom.serverStatus.classList.add("is-loading");
+      dom.serverStatus.textContent = message;
+      return;
+    }
+
+    state.loadingCounter = Math.max(0, state.loadingCounter - 1);
+    if (state.loadingCounter === 0) {
+      dom.loadingOverlay.classList.add("hidden");
+      dom.serverStatus.classList.remove("is-loading");
+    }
+  }
+
+  function showFormError(scope, message) {
+    const target = scope === "login" ? dom.loginError : dom.reportError;
+    if (!target) return;
+    target.textContent = message;
+    target.classList.remove("hidden");
+  }
+
+  function clearFormError(scope) {
+    const target = scope === "login" ? dom.loginError : dom.reportError;
+    if (!target) return;
+    target.textContent = "";
+    target.classList.add("hidden");
+  }
+
+  function isWithinRD(lat, lng) {
+    return lat >= RD_BOUNDS.latMin && lat <= RD_BOUNDS.latMax && lng >= RD_BOUNDS.lngMin && lng <= RD_BOUNDS.lngMax;
+  }
+
   function formatDate(value, short = false) {
     const date = new Date(value);
     const format = short
@@ -477,6 +742,12 @@
 
   function handleError(error) {
     console.error(error);
-    showToast(error.message || "Ocurrio un error.");
+    const msg = error?.message || "Ocurrio un error.";
+
+    if (msg.toLowerCase().includes("credenciales")) {
+      showFormError("login", msg);
+    } else {
+      showToast(msg);
+    }
   }
 })();

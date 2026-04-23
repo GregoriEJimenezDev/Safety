@@ -1,0 +1,98 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeMap RD - Manual de usuario</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #050b18;
+      color: #ecf2ff;
+      line-height: 1.45;
+    }
+    main {
+      width: min(960px, 94vw);
+      margin: 20px auto;
+      border: 1px solid #1a2c45;
+      border-radius: 14px;
+      padding: 16px;
+      background: #0b1322;
+    }
+    h1, h2 {
+      margin: 0 0 10px;
+    }
+    h2 {
+      margin-top: 18px;
+      font-size: 1.1rem;
+      color: #c9defe;
+    }
+    p, li {
+      color: #b9cbe6;
+    }
+    code {
+      background: #0f1a30;
+      border: 1px solid #244066;
+      padding: 1px 6px;
+      border-radius: 6px;
+    }
+    .box {
+      border: 1px solid #1f3552;
+      border-radius: 10px;
+      padding: 10px;
+      background: #0a162a;
+      margin-top: 8px;
+    }
+    a { color: #6dc8ff; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Manual de usuario - SafeMap RD</h1>
+    <p>Esta guia te ayuda a usar la aplicacion para reportar incidentes y evitar zonas de riesgo.</p>
+
+    <h2>1. Ver incidentes recientes</h2>
+    <ul>
+      <li>Usa el filtro <strong>Tipo</strong> para ver atracos, asaltos o robos.</li>
+      <li>Usa <strong>Periodo</strong> para limitar a 7, 30, 90 dias o todo.</li>
+      <li>Haz clic en una tarjeta para centrar el mapa en ese incidente.</li>
+    </ul>
+
+    <h2>2. Reportar un nuevo incidente</h2>
+    <ol>
+      <li>Haz clic en el mapa para seleccionar coordenadas.</li>
+      <li>Completa descripcion, sector y fecha.</li>
+      <li>Presiona <strong>Guardar reporte</strong>.</li>
+    </ol>
+    <div class="box">
+      El formulario valida datos para prevenir errores: descripcion minima, coordenadas validas en RD y fecha no futura.
+    </div>
+
+    <h2>3. Zonas calientes</h2>
+    <p>La seccion "Zonas calientes" agrupa reportes por sector y muestra nivel de riesgo por color.</p>
+
+    <h2>4. Panel administrador</h2>
+    <ul>
+      <li>Inicia sesion para habilitar eliminacion de reportes falsos.</li>
+      <li>Al eliminar, puedes usar <strong>Deshacer</strong> durante 10 segundos.</li>
+    </ul>
+
+    <h2>5. Atajos</h2>
+    <ul>
+      <li><code>?</code> Abrir ayuda</li>
+      <li><code>Alt + R</code> Actualizar datos</li>
+      <li><code>Esc</code> Cerrar ayuda</li>
+    </ul>
+
+    <h2>6. Solucion de problemas</h2>
+    <ul>
+      <li>Si ves "Sin conexion", verifica internet o estado del backend.</li>
+      <li>Si no puedes eliminar incidentes, confirma sesion admin activa.</li>
+      <li>Si falla el reporte, revisa mensaje de validacion mostrado en rojo.</li>
+    </ul>
+
+    <p><a href="/">Volver a la aplicacion</a></p>
+  </main>
+</body>
+</html>

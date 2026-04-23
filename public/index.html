@@ -19,7 +19,15 @@
       </div>
 
       <div class="topbar-right">
-        <p id="serverStatus" class="server-status">Conectando al servidor...</p>
+        <div class="status-row">
+          <p id="serverStatus" class="server-status">Conectando al servidor...</p>
+          <small id="lastUpdated" class="last-updated">Sin actualizar</small>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="refreshBtn" type="button" class="secondary-btn" title="Actualizar datos (Alt+R)">Actualizar</button>
+          <button id="helpBtn" type="button" class="secondary-btn" title="Abrir ayuda (?)">Ayuda</button>
+        </div>
 
         <div class="filters">
           <label>
@@ -95,7 +103,7 @@
             <span>Comunitario</span>
           </div>
 
-          <form id="reportForm" class="report-form" autocomplete="off">
+          <form id="reportForm" class="report-form" autocomplete="off" novalidate>
             <label>
               Tipo de incidente
               <select id="incidentType" required>
@@ -132,8 +140,14 @@
               </label>
             </div>
 
-            <button type="submit">Guardar reporte</button>
-            <p class="form-tip">Selecciona coordenadas con clic en el mapa.</p>
+            <p id="reportError" class="inline-error hidden" role="alert"></p>
+
+            <div class="form-actions">
+              <button id="submitReportBtn" type="submit">Guardar reporte</button>
+              <button id="clearFormBtn" type="button" class="secondary-btn">Limpiar</button>
+            </div>
+
+            <p class="form-tip">Selecciona coordenadas con clic en el mapa. Usa "Limpiar" para empezar de nuevo.</p>
           </form>
         </section>
 
@@ -143,7 +157,7 @@
             <span id="adminBadge" class="admin-badge">No autenticado</span>
           </div>
 
-          <form id="loginForm" class="report-form">
+          <form id="loginForm" class="report-form" novalidate>
             <label>
               Usuario
               <input id="adminUser" type="text" maxlength="40" required placeholder="admin" />
@@ -152,7 +166,8 @@
               Clave
               <input id="adminPass" type="password" maxlength="120" required placeholder="********" />
             </label>
-            <button type="submit">Iniciar sesion</button>
+            <p id="loginError" class="inline-error hidden" role="alert"></p>
+            <button id="loginBtn" type="submit">Iniciar sesion</button>
           </form>
 
           <div id="adminActions" class="admin-actions hidden">
@@ -166,6 +181,67 @@
     <footer class="footer-note">
       <p>Uso preventivo comunitario. Ante una emergencia real en Republica Dominicana llama al 911.</p>
     </footer>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite">
+    <div class="loading-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <p id="loadingText">Actualizando datos...</p>
+    </div>
+  </div>
+
+  <div id="undoBar" class="undo-bar hidden" role="status" aria-live="polite">
+    <span id="undoText">Reporte eliminado.</span>
+    <button id="undoBtn" type="button" class="secondary-btn">Deshacer</button>
+  </div>
+
+  <div id="helpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="helpTitle">Ayuda rapida de SafeMap RD</h2>
+        <button id="closeHelpBtn" type="button" class="secondary-btn">Cerrar</button>
+      </div>
+
+      <div class="help-grid">
+        <section>
+          <h3>Como reportar un robo</h3>
+          <ol>
+            <li>Haz clic en el mapa para elegir coordenadas.</li>
+            <li>Completa tipo, descripcion, sector y fecha.</li>
+            <li>Presiona "Guardar reporte".</li>
+          </ol>
+        </section>
+
+        <section>
+          <h3>Filtrar y analizar</h3>
+          <ul>
+            <li>Filtra por tipo de incidente y periodo.</li>
+            <li>Abre un incidente para centrar el mapa.</li>
+            <li>Revisa "Zonas calientes" para evitar rutas.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Moderacion admin</h3>
+          <ul>
+            <li>Inicia sesion para habilitar botones de eliminar.</li>
+            <li>Al eliminar, puedes deshacer en 10 segundos.</li>
+            <li>Usa esto para remover reportes falsos.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>Atajos utiles</h3>
+          <ul>
+            <li><code>?</code> abre esta ayuda.</li>
+            <li><code>Alt + R</code> actualiza datos.</li>
+            <li><code>Esc</code> cierra la ayuda.</li>
+          </ul>
+        </section>
+      </div>
+
+      <p class="form-tip">Documentacion completa: <a href="/help.html" target="_blank" rel="noopener">Manual de usuario</a></p>
+    </div>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

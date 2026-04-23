@@ -22,6 +22,7 @@ jobs:
           cp index.html site/
           cp styles.css site/
           cp app.js site/
+          cp help.html site/
           touch site/.nojekyll
 
       - name: Publish to gh-pages
@@ -31,3 +32,4 @@ jobs:
           publish_dir: ./site
           publish_branch: gh-pages
           force_orphan: true
+

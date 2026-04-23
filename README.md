@@ -7,12 +7,14 @@ Aplicacion web para visualizar y reportar robos recientes en Republica Dominican
 - Backend: Node.js (sin dependencias externas)
 - Persistencia: archivos JSON en `data/`
 
-## Funcionalidades
+## Funcionalidades principales
 - Mapa interactivo de incidentes por tipo.
 - Reporte comunitario de robos recientes.
 - Filtros por tipo y ventana temporal.
 - Deteccion de zonas calientes por concentracion.
-- Panel admin con autenticacion para moderar reportes (eliminar).
+- Panel admin con autenticacion para moderar reportes.
+- Opcion "Deshacer" despues de eliminar un reporte.
+- Ayuda integrada en UI y manual en `public/help.html`.
 
 ## Seguridad aplicada
 - Validacion y saneo de entradas en backend.
@@ -23,6 +25,10 @@ Aplicacion web para visualizar y reportar robos recientes en Republica Dominican
 - Tokens firmados HMAC con expiracion.
 - Cabeceras de seguridad y CSP.
 - Escritura atomica para archivos de datos.
+
+## Usabilidad y heuristicas
+- Se implemento una capa UX para cumplir heuristicas clave.
+- Revisa el detalle en: `HEURISTICS.md`.
 
 ## Ejecutar
 1. Abrir terminal en `C:\Users\user\OneDrive\Desktop\Security`
@@ -48,9 +54,15 @@ set TOKEN_SECRET=una_clave_larga_y_unica
 npm start
 ```
 
+## Documentacion de uso
+- Ayuda rapida en la app: boton `Ayuda`.
+- Manual completo: `http://127.0.0.1:3000/help.html`
+
 ## Estructura
 - `server.js`: API + seguridad + servidor estatico.
 - `public/`: frontend.
+- `public/help.html`: manual de usuario.
+- `HEURISTICS.md`: checklist heuristico.
 - `data/incidents.json`: base de datos de incidentes.
 - `data/users.json`: usuarios admin hash.
 
