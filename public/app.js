@@ -10,6 +10,10 @@
   };
 
   const TOKEN_KEY = "safemap_admin_token";
+  const MODE_KEY = "safemap_app_mode";
+  const LOCAL_INCIDENTS_KEY = "safemap_local_incidents_v2";
+  const LOCAL_ADMIN_KEY = "safemap_local_admin_v1";
+
   const RD_CENTER = [18.4861, -69.9312];
   const RD_BOUNDS = {
     latMin: 17.4,
@@ -68,6 +72,7 @@
 
   const state = {
     loadingCounter: 0,
+    mode: sessionStorage.getItem(MODE_KEY) || "auto",
     token: sessionStorage.getItem(TOKEN_KEY) || "",
     adminUser: null,
     currentIncidents: [],
@@ -90,32 +95,23 @@
     initMap();
     initDateDefault();
     bindEvents();
-    await verifySession();
+
     await refreshAll();
+    await verifySession();
+    renderIncidents(state.currentIncidents);
 
     window.setTimeout(() => map.invalidateSize(), 120);
   }
 
   function bindEvents() {
-    dom.typeFilter.addEventListener("change", () => {
-      refreshAll().catch(handleError);
-    });
-
-    dom.timeFilter.addEventListener("change", () => {
-      refreshAll().catch(handleError);
-    });
-
-    dom.refreshBtn.addEventListener("click", () => {
-      refreshAll().catch(handleError);
-    });
+    dom.typeFilter.addEventListener("change", () => refreshAll().catch(handleError));
+    dom.timeFilter.addEventListener("change", () => refreshAll().catch(handleError));
+    dom.refreshBtn.addEventListener("click", () => refreshAll().catch(handleError));
 
     dom.helpBtn.addEventListener("click", openHelp);
     dom.closeHelpBtn.addEventListener("click", closeHelp);
-
     dom.helpModal.addEventListener("click", (event) => {
-      if (event.target === dom.helpModal) {
-        closeHelp();
-      }
+      if (event.target === dom.helpModal) closeHelp();
     });
 
     dom.reportForm.addEventListener("submit", (event) => {
@@ -134,14 +130,13 @@
       state.token = "";
       state.adminUser = null;
       sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(LOCAL_ADMIN_KEY);
       updateAdminUi();
       refreshAll().catch(handleError);
       showToast("Sesion cerrada");
     });
 
-    dom.undoBtn.addEventListener("click", () => {
-      undoDelete().catch(handleError);
-    });
+    dom.undoBtn.addEventListener("click", () => undoDelete().catch(handleError));
 
     window.addEventListener("keydown", onGlobalShortcuts);
 
@@ -153,8 +148,8 @@
 
     window.addEventListener("offline", () => {
       state.online = false;
-      renderOfflineStatus();
-      showToast("Sin conexion. Mostrando el ultimo estado disponible.");
+      renderServerStatus({ incidents: state.currentIncidents.length });
+      showToast("Sin conexion. Se mantiene el ultimo estado cargado.");
     });
   }
 
@@ -220,7 +215,19 @@
   }
 
   async function verifySession() {
+    if (state.mode === "local") {
+      const localAdmin = localStorage.getItem(LOCAL_ADMIN_KEY);
+      if (localAdmin) {
+        state.adminUser = { username: localAdmin, role: "admin" };
+      } else {
+        state.adminUser = null;
+      }
+      updateAdminUi();
+      return;
+    }
+
     if (!state.token) {
+      state.adminUser = null;
       updateAdminUi();
       return;
     }
@@ -241,47 +248,152 @@
     setLoading(true, "Actualizando incidentes...");
 
     try {
-      const query = new URLSearchParams({
-        type: dom.typeFilter.value,
-        days: dom.timeFilter.value
-      }).toString();
+      const data = await loadDataByMode();
 
-      const [health, incidentsData, hotzonesData] = await Promise.all([
-        apiRequest(API.health),
-        apiRequest(`${API.incidents}?${query}`),
-        apiRequest(`${API.hotzones}?${query}`)
-      ]);
+      renderServerStatus({ incidents: data.totalIncidents });
 
-      renderServerStatus(health);
-
-      state.currentIncidents = incidentsData.items || [];
+      state.currentIncidents = data.incidents;
       renderIncidents(state.currentIncidents);
       renderMarkers(state.currentIncidents);
-
-      const zones = hotzonesData.items || [];
-      renderHotzones(zones);
-      renderMetrics(state.currentIncidents, zones);
+      renderHotzones(data.zones);
+      renderMetrics(state.currentIncidents, data.zones);
 
       dom.lastUpdated.textContent = `Actualizado: ${formatDate(new Date().toISOString(), true)}`;
+
+      await verifySession();
+      renderIncidents(state.currentIncidents);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadDataByMode() {
+    const query = new URLSearchParams({
+      type: dom.typeFilter.value,
+      days: dom.timeFilter.value
+    }).toString();
+
+    if (state.mode !== "local") {
+      try {
+        const [health, incidentsData, hotzonesData] = await Promise.all([
+          apiRequest(API.health),
+          apiRequest(`${API.incidents}?${query}`),
+          apiRequest(`${API.hotzones}?${query}`)
+        ]);
+
+        state.mode = "api";
+        sessionStorage.setItem(MODE_KEY, state.mode);
+
+        return {
+          totalIncidents: health.incidents || 0,
+          incidents: incidentsData.items || [],
+          zones: hotzonesData.items || []
+        };
+      } catch {
+        state.mode = "local";
+        sessionStorage.setItem(MODE_KEY, state.mode);
+        showToast("Servidor API no disponible. Se activo modo local.");
+      }
+    }
+
+    const all = loadLocalIncidents();
+    const incidents = filterIncidentsLocal(all, dom.typeFilter.value, dom.timeFilter.value);
+    const zones = computeHotZones(incidents).slice(0, 8);
+
+    return {
+      totalIncidents: all.length,
+      incidents,
+      zones
+    };
+  }
+
+  function loadLocalIncidents() {
+    try {
+      const raw = localStorage.getItem(LOCAL_INCIDENTS_KEY);
+      if (!raw) {
+        const seeded = buildSeedIncidents();
+        localStorage.setItem(LOCAL_INCIDENTS_KEY, JSON.stringify(seeded));
+        return seeded;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (error) {
+      console.error("Error loading local incidents", error);
+    }
+
+    const seeded = buildSeedIncidents();
+    localStorage.setItem(LOCAL_INCIDENTS_KEY, JSON.stringify(seeded));
+    return seeded;
+  }
+
+  function saveLocalIncidents(items) {
+    localStorage.setItem(LOCAL_INCIDENTS_KEY, JSON.stringify(items));
+  }
+
+  function filterIncidentsLocal(all, type, days) {
+    const now = Date.now();
+    const sorted = [...all].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return sorted.filter((item) => {
+      const typeMatch = type === "all" || item.type === type;
+      if (!typeMatch) return false;
+
+      if (days === "all") return true;
+      const dayNum = Number(days);
+      if (!Number.isFinite(dayNum)) return true;
+
+      const age = now - new Date(item.date).getTime();
+      return age >= 0 && age <= dayNum * 24 * 60 * 60 * 1000;
+    });
+  }
+
+  function computeHotZones(items) {
+    const grouped = new Map();
+
+    for (const item of items) {
+      const key = normalizeText(item.sector, 80).toLowerCase();
+      const found = grouped.get(key) || {
+        name: item.sector,
+        count: 0,
+        latSum: 0,
+        lngSum: 0
+      };
+
+      found.count += 1;
+      found.latSum += item.lat;
+      found.lngSum += item.lng;
+      grouped.set(key, found);
+    }
+
+    return Array.from(grouped.values())
+      .filter((zone) => zone.count >= 2)
+      .map((zone) => ({
+        name: zone.name,
+        count: zone.count,
+        lat: Number((zone.latSum / zone.count).toFixed(5)),
+        lng: Number((zone.lngSum / zone.count).toFixed(5)),
+        risk: zone.count >= 5 ? "very-high" : zone.count >= 3 ? "high" : "medium"
+      }))
+      .sort((a, b) => b.count - a.count);
   }
 
   function renderServerStatus(health) {
     dom.serverStatus.classList.remove("is-loading", "is-offline");
 
     if (!state.online) {
-      renderOfflineStatus();
+      dom.serverStatus.textContent = "Sin conexion al servidor";
+      dom.serverStatus.classList.add("is-offline");
+      return;
+    }
+
+    if (state.mode === "local") {
+      dom.serverStatus.textContent = `Modo local activo | ${health.incidents} reportes guardados`;
+      dom.serverStatus.classList.add("is-offline");
       return;
     }
 
     dom.serverStatus.textContent = `Servidor activo | ${health.incidents} reportes totales`;
-  }
-
-  function renderOfflineStatus() {
-    dom.serverStatus.textContent = "Sin conexion al servidor";
-    dom.serverStatus.classList.add("is-offline");
   }
 
   function renderIncidents(items) {
@@ -378,7 +490,7 @@
         fillOpacity: 0.15,
         weight: 2
       })
-        .bindPopup(`<strong>${escapeHtml(zone.name)}</strong><br>${zone.count} incidentes`) 
+        .bindPopup(`<strong>${escapeHtml(zone.name)}</strong><br>${zone.count} incidentes`)
         .addTo(hotZoneLayer);
 
       circle.on("click", () => {
@@ -395,12 +507,13 @@
 
   function updateAdminUi() {
     if (state.adminUser) {
-      dom.adminBadge.textContent = `Autenticado: ${state.adminUser.username}`;
+      const modeLabel = state.mode === "local" ? " (local)" : "";
+      dom.adminBadge.textContent = `Autenticado: ${state.adminUser.username}${modeLabel}`;
       dom.adminBadge.classList.add("ok");
       dom.adminActions.classList.remove("hidden");
       dom.loginForm.classList.add("hidden");
     } else {
-      dom.adminBadge.textContent = "No autenticado";
+      dom.adminBadge.textContent = state.mode === "local" ? "No autenticado (modo local)" : "No autenticado";
       dom.adminBadge.classList.remove("ok");
       dom.adminActions.classList.add("hidden");
       dom.loginForm.classList.remove("hidden");
@@ -419,23 +532,39 @@
       lng: Number(dom.incidentLng.value)
     };
 
-    const reportError = validateReport(payload);
-    if (reportError) {
-      showFormError("report", reportError);
+    const error = validateReport(payload);
+    if (error) {
+      showFormError("report", error);
       return;
     }
 
     setButtonBusy(dom.submitReportBtn, true, "Guardando...");
 
     try {
-      await apiRequest(API.incidents, {
-        method: "POST",
-        token: state.token,
-        body: payload
-      });
+      if (state.mode === "local") {
+        const all = loadLocalIncidents();
+        all.unshift({
+          id: cryptoRandomId(),
+          type: payload.type,
+          description: payload.description,
+          sector: payload.sector,
+          lat: Number(payload.lat.toFixed(5)),
+          lng: Number(payload.lng.toFixed(5)),
+          date: new Date(payload.date).toISOString(),
+          createdAt: new Date().toISOString(),
+          reportedBy: state.adminUser?.username || "community"
+        });
+        saveLocalIncidents(all);
+      } else {
+        await apiRequest(API.incidents, {
+          method: "POST",
+          token: state.token,
+          body: payload
+        });
+      }
 
       clearReportForm();
-      showToast("Reporte guardado.");
+      showToast(state.mode === "local" ? "Reporte guardado en modo local." : "Reporte guardado.");
       await refreshAll();
     } finally {
       setButtonBusy(dom.submitReportBtn, false);
@@ -485,14 +614,24 @@
     setButtonBusy(dom.loginBtn, true, "Ingresando...");
 
     try {
-      const data = await apiRequest(API.login, {
-        method: "POST",
-        body: { username, password }
-      });
+      if (state.mode === "local") {
+        if (username.toLowerCase() === "admin" && password === "Cambia123!") {
+          state.adminUser = { username: "admin", role: "admin" };
+          localStorage.setItem(LOCAL_ADMIN_KEY, state.adminUser.username);
+        } else {
+          throw new Error("Credenciales invalidas en modo local. Usa admin / Cambia123!");
+        }
+      } else {
+        const data = await apiRequest(API.login, {
+          method: "POST",
+          body: { username, password }
+        });
 
-      state.token = data.token;
-      sessionStorage.setItem(TOKEN_KEY, state.token);
-      state.adminUser = data.user;
+        state.token = data.token;
+        sessionStorage.setItem(TOKEN_KEY, state.token);
+        state.adminUser = data.user;
+      }
+
       dom.loginForm.reset();
       updateAdminUi();
       showToast("Sesion admin iniciada");
@@ -503,7 +642,7 @@
   }
 
   async function deleteIncident(id) {
-    if (!state.token) {
+    if (!state.adminUser) {
       showToast("Debes iniciar sesion como admin.");
       return;
     }
@@ -514,18 +653,21 @@
       return;
     }
 
-    const accepted = window.confirm(`Eliminar reporte "${item.description}"?`);
-    if (!accepted) {
-      return;
+    const accepted = window.confirm(`Eliminar reporte \"${item.description}\"?`);
+    if (!accepted) return;
+
+    if (state.mode === "local") {
+      const all = loadLocalIncidents().filter((incident) => incident.id !== id);
+      saveLocalIncidents(all);
+    } else {
+      await apiRequest(`${API.incidents}/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        token: state.token
+      });
     }
 
-    await apiRequest(`${API.incidents}/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      token: state.token
-    });
-
-    showToast("Reporte eliminado. Puedes deshacer por 10 segundos.");
     startUndoWindow(item);
+    showToast("Reporte eliminado. Puedes deshacer por 10 segundos.");
     await refreshAll();
   }
 
@@ -539,10 +681,7 @@
       clearUndoWindow();
     }, 10_000);
 
-    state.deleteUndo = {
-      item,
-      timeoutId
-    };
+    state.deleteUndo = { item, timeoutId };
   }
 
   function clearUndoWindow() {
@@ -562,18 +701,34 @@
 
     const incident = state.deleteUndo.item;
 
-    await apiRequest(API.incidents, {
-      method: "POST",
-      token: state.token,
-      body: {
+    if (state.mode === "local") {
+      const all = loadLocalIncidents();
+      all.unshift({
+        id: cryptoRandomId(),
         type: incident.type,
         description: incident.description,
         sector: incident.sector,
         lat: incident.lat,
         lng: incident.lng,
-        date: incident.date
-      }
-    });
+        date: incident.date,
+        createdAt: new Date().toISOString(),
+        reportedBy: state.adminUser?.username || "admin"
+      });
+      saveLocalIncidents(all);
+    } else {
+      await apiRequest(API.incidents, {
+        method: "POST",
+        token: state.token,
+        body: {
+          type: incident.type,
+          description: incident.description,
+          sector: incident.sector,
+          lat: incident.lat,
+          lng: incident.lng,
+          date: incident.date
+        }
+      });
+    }
 
     clearUndoWindow();
     showToast("Reporte restaurado.");
@@ -603,7 +758,7 @@
   function buildMarkerIcon(type) {
     return L.divIcon({
       className: "custom-marker-wrapper",
-      html: `<span class="marker-pin marker-${type}"></span>`,
+      html: `<span class=\"marker-pin marker-${type}\"></span>`,
       iconSize: [18, 18],
       iconAnchor: [9, 9]
     });
@@ -666,9 +821,7 @@
     }
 
     const original = button.dataset.originalLabel;
-    if (original) {
-      button.textContent = original;
-    }
+    if (original) button.textContent = original;
     button.disabled = false;
   }
 
@@ -691,20 +844,26 @@
 
   function showFormError(scope, message) {
     const target = scope === "login" ? dom.loginError : dom.reportError;
-    if (!target) return;
     target.textContent = message;
     target.classList.remove("hidden");
   }
 
   function clearFormError(scope) {
     const target = scope === "login" ? dom.loginError : dom.reportError;
-    if (!target) return;
     target.textContent = "";
     target.classList.add("hidden");
   }
 
   function isWithinRD(lat, lng) {
     return lat >= RD_BOUNDS.latMin && lat <= RD_BOUNDS.latMax && lng >= RD_BOUNDS.lngMin && lng <= RD_BOUNDS.lngMax;
+  }
+
+  function cryptoRandomId() {
+    if (window.crypto && window.crypto.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+
+    return `id-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   }
 
   function formatDate(value, short = false) {
@@ -724,10 +883,11 @@
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",
-      '"': "&quot;",
+      '\"': "&quot;",
       "'": "&#039;"
     };
-    return String(value).replace(/[&<>"']/g, (char) => map[char]);
+
+    return String(value).replace(/[&<>\"']/g, (char) => map[char]);
   }
 
   function showToast(message) {
@@ -737,7 +897,7 @@
     window.clearTimeout(showToast.timer);
     showToast.timer = window.setTimeout(() => {
       dom.toast.classList.remove("show");
-    }, 2600);
+    }, 2800);
   }
 
   function handleError(error) {
@@ -746,8 +906,33 @@
 
     if (msg.toLowerCase().includes("credenciales")) {
       showFormError("login", msg);
-    } else {
-      showToast(msg);
+      return;
     }
+
+    showToast(msg);
+  }
+
+  function buildSeedIncidents() {
+    const now = new Date();
+
+    const daysAgoIso = (days, hour, minute) => {
+      const date = new Date(now);
+      date.setDate(now.getDate() - days);
+      date.setHours(hour, minute, 0, 0);
+      return date.toISOString();
+    };
+
+    return [
+      { id: "seed-1", type: "robbery", description: "Despojo de celular en parada", sector: "Naco", lat: 18.4857, lng: -69.9341, date: daysAgoIso(1, 20, 30) },
+      { id: "seed-2", type: "assault", description: "Asalto a peaton en avenida principal", sector: "Naco", lat: 18.4869, lng: -69.9314, date: daysAgoIso(3, 21, 10) },
+      { id: "seed-3", type: "theft", description: "Robo de cartera en colmado", sector: "Gazcue", lat: 18.4679, lng: -69.9045, date: daysAgoIso(2, 19, 20) },
+      { id: "seed-4", type: "vehicle", description: "Robo de motocicleta estacionada", sector: "Villa Juana", lat: 18.4941, lng: -69.9052, date: daysAgoIso(5, 23, 5) },
+      { id: "seed-5", type: "robbery", description: "Atraco con arma blanca", sector: "Los Mina", lat: 18.5016, lng: -69.8653, date: daysAgoIso(4, 18, 15) },
+      { id: "seed-6", type: "assault", description: "Intento de asalto en semaforo", sector: "Piantini", lat: 18.4769, lng: -69.9367, date: daysAgoIso(7, 22, 40) },
+      { id: "seed-7", type: "robbery", description: "Robo a negocio pequeno", sector: "Piantini", lat: 18.4784, lng: -69.9381, date: daysAgoIso(10, 20, 50) },
+      { id: "seed-8", type: "theft", description: "Sustraccion de pertenencias en vehiculo", sector: "Bella Vista", lat: 18.4556, lng: -69.9454, date: daysAgoIso(8, 17, 35) },
+      { id: "seed-9", type: "vehicle", description: "Robo de retrovisores", sector: "Bella Vista", lat: 18.4571, lng: -69.9423, date: daysAgoIso(12, 21, 5) },
+      { id: "seed-10", type: "robbery", description: "Asalto en banca de loteria", sector: "San Carlos", lat: 18.4739, lng: -69.9048, date: daysAgoIso(13, 19, 5) }
+    ];
   }
 })();
